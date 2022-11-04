@@ -7,18 +7,6 @@ import struct
 from io import BytesIO
 
 # ------------- Functions -------------
-def add_to_id_list(seperated_object_table, listname, listvar, number):
-    numberfound = 0
-    listdata = {listname: listvar}
-    if seperated_object_table == []:
-        seperated_object_table.append([number,listdata])
-    else:
-        for numberobj in seperated_object_table:
-            if numberobj[0] == number:
-                numberfound = 1
-                numberobj[1] = numberobj[1] | listdata
-        if numberfound == 0:
-            seperated_object_table.append([number,listdata])
 def create_bytesio(data):
     bytesio = BytesIO()
     bytesio.write(data)
@@ -42,43 +30,46 @@ def readriffdata(riffbytebuffer, offset):
 
 # ------------- deconstruct -------------
 def deconstruct_arrangement(arrdata):
-    flarrdata = create_bytesio(arrdata)
+    bio_fldata = create_bytesio(arrdata)
     output = []
-    while flarrdata[0].tell() < flarrdata[1]:
+    while bio_fldata[0].tell() < bio_fldata[1]:
         placement = {}
-        placement['position'] = int.from_bytes(flarrdata[0].read(4), "little")
-        placement['patternbase'] = int.from_bytes(flarrdata[0].read(2), "little")
-        placement['itemindex'] = int.from_bytes(flarrdata[0].read(2), "little")
-        placement['length'] = int.from_bytes(flarrdata[0].read(4), "little")
-        placement['trackindex'] = int.from_bytes(flarrdata[0].read(4), "little")
-        placement['unknown1'] = int.from_bytes(flarrdata[0].read(2), "little")
-        placement['flags'] = int.from_bytes(flarrdata[0].read(2), "little")
-        placement['unknown2'] = int.from_bytes(flarrdata[0].read(2), "little")
-        placement['unknown3'] = int.from_bytes(flarrdata[0].read(2), "little")
-        startoffset = int.from_bytes(flarrdata[0].read(4), "little")
-        endoffset = int.from_bytes(flarrdata[0].read(4), "little")
+        placement['position'] = int.from_bytes(bio_fldata[0].read(4), "little")
+        placement['patternbase'] = int.from_bytes(bio_fldata[0].read(2), "little")
+        placement['itemindex'] = int.from_bytes(bio_fldata[0].read(2), "little")
+        placement['length'] = int.from_bytes(bio_fldata[0].read(4), "little")
+        placement['trackindex'] = int.from_bytes(bio_fldata[0].read(4), "little")
+        placement['unknown1'] = int.from_bytes(bio_fldata[0].read(2), "little")
+        placement['flags'] = int.from_bytes(bio_fldata[0].read(2), "little")
+        placement['unknown2'] = int.from_bytes(bio_fldata[0].read(2), "little")
+        placement['unknown3'] = int.from_bytes(bio_fldata[0].read(2), "little")
+        startoffset = int.from_bytes(bio_fldata[0].read(4), "little")
+        endoffset = int.from_bytes(bio_fldata[0].read(4), "little")
         if startoffset != 4294967295: placement['startoffset'] = startoffset
         if endoffset != 4294967295: placement['endoffset'] = endoffset
         output.append(placement)
     return output
 def deconstruct_trackinfo(trackdata):
-    fltrackdata = create_bytesio(trackdata)[0]
+    bio_fltrack = create_bytesio(trackdata)[0]
     params = {}
-    trackid = int.from_bytes(fltrackdata.read(4), "little")
-    params['color'] = int.from_bytes(fltrackdata.read(4), "little")
-    params['icon'] = int.from_bytes(fltrackdata.read(4), "little")
-    params['enabled'] = int.from_bytes(fltrackdata.read(1), "little")
-    params['height'] = struct.unpack('<f', fltrackdata.read(4))[0]
-    params['lockedtocontent'] = int.from_bytes(fltrackdata.read(1), "little")
-    params['motion'] = int.from_bytes(fltrackdata.read(4), "little")
-    params['press'] = int.from_bytes(fltrackdata.read(4), "little")
-    params['triggersync'] = int.from_bytes(fltrackdata.read(4), "little")
-    params['queued'] = int.from_bytes(fltrackdata.read(4), "little")
-    params['tolerant'] = int.from_bytes(fltrackdata.read(4), "little")
-    params['positionSync'] = int.from_bytes(fltrackdata.read(4), "little")
-    params['grouped'] = int.from_bytes(fltrackdata.read(1), "little")
-    params['locked'] = int.from_bytes(fltrackdata.read(1), "little")
-    return [trackid, params]
+    trackid = int.from_bytes(bio_fltrack.read(4), "little")
+    params['color'] = int.from_bytes(bio_fltrack.read(4), "little")
+    params['icon'] = int.from_bytes(bio_fltrack.read(4), "little")
+    params['enabled'] = int.from_bytes(bio_fltrack.read(1), "little")
+    params['height'] = struct.unpack('<f', bio_fltrack.read(4))[0]
+    params['lockedtocontent'] = int.from_bytes(bio_fltrack.read(1), "little")
+    params['motion'] = int.from_bytes(bio_fltrack.read(4), "little")
+    params['press'] = int.from_bytes(bio_fltrack.read(4), "little")
+    params['triggersync'] = int.from_bytes(bio_fltrack.read(4), "little")
+    params['queued'] = int.from_bytes(bio_fltrack.read(4), "little")
+    params['tolerant'] = int.from_bytes(bio_fltrack.read(4), "little")
+    params['positionSync'] = int.from_bytes(bio_fltrack.read(4), "little")
+    params['grouped'] = int.from_bytes(bio_fltrack.read(1), "little")
+    params['locked'] = int.from_bytes(bio_fltrack.read(1), "little")
+    if params['color'] == 5656904 and params['icon'] == 0 and params['enabled'] == 1 and params['height'] == 1.0 and params['lockedtocontent'] == 255 and params['motion'] == 16777215 and params['press'] == 0 and params['triggersync'] == 0 and params['queued'] == 5 and params['tolerant'] == 0 and params['positionSync'] == 1 and params['grouped'] == 0 and params['locked'] == 0:
+        return [trackid, None]
+    else:
+        return [trackid, params]
 def deconstruct_fxrouting(fxroutingbytes):
     fxroutingdata = create_bytesio(fxroutingbytes)
     fxcount = 0
@@ -116,13 +107,11 @@ def deconstruct(inputfile):
             ##print('PPQ:',str(flp_ppq))
         if riffobj[0] == b'FLdt':
             mainevents = riffobj[1]
-    
             global eventdatastream
             eventdatasize = len(mainevents)
             eventdatastream = BytesIO()
             eventdatastream.write(mainevents)
             eventdatastream.seek(0)
-    
             eventtable = []
             while eventdatastream.tell() < int(eventdatasize):
                 event_id = int.from_bytes(eventdatastream.read(1), "little")
@@ -153,7 +142,6 @@ def deconstruct(inputfile):
     FL_Arrangements = {}
     FL_FXCreationMode = 0
     T_FL_FXNum = -1
-    PLTrackName = None
 
     for event in eventtable:
         event_id = event[0]
@@ -219,25 +207,21 @@ def deconstruct(inputfile):
         if event_id == 150: 
             FL_Patterns[str(T_FL_CurrentPattern)]['color'] = event_data
 
-
-        if event_id == 239: #PLTrackName
-            PLTrackName = None
         if event_id == 238: #PLTrackInfo
             FLT_out = deconstruct_trackinfo(event_data)
-            FL_Tracks[str(FLT_out[0])] = FLT_out[1]
-            PLTrackName = None
-    
-    
-    
+            currenttracknum = FLT_out[0]
+            if FLT_out[1] != None:
+                FL_Tracks[str(currenttracknum)] = FLT_out[1]
+        if event_id == 239: #PLTrackName
+            FL_Tracks[str(currenttracknum)]['name'] = event_data.decode('utf-16le').rstrip('\x00\x00')
+
         if event_id == 99: 
             T_FL_CurrentArrangement = event_data
             #print('NewArrangement:', event_data)
             if str(T_FL_CurrentArrangement) not in FL_Arrangements:
                 FL_Arrangements[str(T_FL_CurrentArrangement)] = {}
         if event_id == 241: 
-            event_text = event_data.decode('utf-16le').rstrip('\x00\x00')
-            #print('\\__ArrangementName:', event_text)
-            FL_Arrangements[str(T_FL_CurrentArrangement)]['name'] = event_text
+            FL_Arrangements[str(T_FL_CurrentArrangement)]['name'] = event_data.decode('utf-16le').rstrip('\x00\x00')
         if event_id == 233: 
             playlistitems = deconstruct_arrangement(event_data)
             FL_Arrangements[str(T_FL_CurrentArrangement)]['items'] = playlistitems
@@ -360,6 +344,7 @@ def deconstruct(inputfile):
                 FXPlugin['plugin'] = DefPluginName
                 FXPlugin['data'] = event_data
             if event_id == 155: FXPlugin['icon'] = event_data
+            if event_id == 128: FXPlugin['color'] = event_data
             if event_id == 98: #FXToSlotNum
                 FL_Mixer[str(T_FL_FXNum)]['slots'][event_data] = FXPlugin
                 FXPlugin = None
@@ -384,10 +369,30 @@ def deconstruct(inputfile):
     return output
 
 # ------------- reconstruct -------------
+def reconstruct_flevent(FLdt_bytes, value, data):
+    if value <= 63 and value >= 0: # int8
+        FLdt_bytes.write(value.to_bytes(1, "little"))
+        FLdt_bytes.write(data.to_bytes(1, "little"))
+    if value <= 127 and value >= 64 : # int16
+        FLdt_bytes.write(value.to_bytes(1, "little"))
+        FLdt_bytes.write(data.to_bytes(2, "little"))
+    if value <= 191 and value >= 128 : # int32
+        FLdt_bytes.write(value.to_bytes(1, "little"))
+        FLdt_bytes.write(data.to_bytes(4, "little"))
+    if value <= 224 and value >= 192 : # text
+        FLdt_bytes.write(value.to_bytes(1, "little"))
+        FLdt_bytes.write(varint.encode(len(data)))
+        FLdt_bytes.write(data)
+    if value <= 255 and value >= 225 : # data
+        FLdt_bytes.write(value.to_bytes(1, "little"))
+        FLdt_bytes.write(varint.encode(len(data)))
+        FLdt_bytes.write(data)
 def reconstruct_arrangement(data_FLdt, arrangements):
     for arrangement in arrangements:
         #print(arrangements[arrangement])
         reconstruct_flevent(data_FLdt, 99, int(arrangement)) #NewArrangement
+        if 'name' in arrangements[arrangement]:
+            reconstruct_flevent(data_FLdt, 241, arrangements[arrangement]['name'].encode('utf-16le') + b'\x00\x00') #ArrangementName
         placements = arrangements[arrangement]['items']
         BytesIO_arrangement = BytesIO()
         for item in placements:
@@ -407,24 +412,18 @@ def reconstruct_arrangement(data_FLdt, arrangements):
             else: BytesIO_arrangement.write(b'\xff\xff\xff\xff')
         BytesIO_arrangement.seek(0)
         reconstruct_flevent(data_FLdt, 233, BytesIO_arrangement.read()) #PlayListItems
-def reconstruct_flevent(FLdt_bytes, value, data):
-    if value <= 63 and value >= 0: # int8
-        FLdt_bytes.write(value.to_bytes(1, "little"))
-        FLdt_bytes.write(data.to_bytes(1, "little"))
-    if value <= 127 and value >= 64 : # int16
-        FLdt_bytes.write(value.to_bytes(1, "little"))
-        FLdt_bytes.write(data.to_bytes(2, "little"))
-    if value <= 191 and value >= 128 : # int32
-        FLdt_bytes.write(value.to_bytes(1, "little"))
-        FLdt_bytes.write(data.to_bytes(4, "little"))
-    if value <= 224 and value >= 192 : # text
-        FLdt_bytes.write(value.to_bytes(1, "little"))
-        FLdt_bytes.write(varint.encode(len(data)))
-        FLdt_bytes.write(data)
-    if value <= 255 and value >= 225 : # data
-        FLdt_bytes.write(value.to_bytes(1, "little"))
-        FLdt_bytes.write(varint.encode(len(data)))
-        FLdt_bytes.write(data)
+def reconstruct_timemarkers(data_FLdt, timemarkers):
+    for timemarker in timemarkers:
+        timemarker_item = timemarkers[timemarker]
+        timemarkertype = timemarker_item['type'] << 24
+        timemarkertime = timemarker_item['pos']
+        reconstruct_flevent(data_FLdt, 148, timemarkertype+timemarkertime)
+        if 'numerator' in timemarker_item: reconstruct_flevent(data_FLdt, 33, timemarker_item['numerator'])
+        else: reconstruct_flevent(data_FLdt, 33, 4)
+        if 'denominator' in timemarker_item: reconstruct_flevent(data_FLdt, 34, timemarker_item['denominator'])
+        else: reconstruct_flevent(data_FLdt, 34, 4)
+        if 'name' in timemarker_item: reconstruct_flevent(data_FLdt, 205, timemarker_item['name'].encode('utf-16le') + b'\x00\x00')
+        else: reconstruct_flevent(data_FLdt, 205, b'\x20\x00\x00\x00')
 def reconstruct_channels(data_FLdt, channels):
     for channel in channels:
         reconstruct_flevent(data_FLdt, 64, int(channel)) #NewChan
@@ -458,7 +457,6 @@ def reconstruct_channels(data_FLdt, channels):
         if 'cutcutby' in channels[channel]: reconstruct_flevent(data_FLdt, 132, channels[channel]['cutcutby']) #CutCutBy
         if 'layerflags' in channels[channel]: reconstruct_flevent(data_FLdt, 144, channels[channel]['layerflags']) #LayerFlags
         if 'filternum' in channels[channel]: reconstruct_flevent(data_FLdt, 145, channels[channel]['filternum']) #ChanFilterNum
-        if 'middlenote' in channels[channel]: reconstruct_flevent(data_FLdt, 135, channels[channel]['middlenote']) #MiddleNote
         reconstruct_flevent(data_FLdt, 32, 0)
         if 'envlfo_pan' in channels[channel]: reconstruct_flevent(data_FLdt, 218, channels[channel]['envlfo_pan']) #Envelope
         else: reconstruct_flevent(data_FLdt, 218, b'\x00\x00\x00\x00\x00\x00\x00\x00d\x00\x00\x00 N\x00\x00 N\x00\x000u\x00\x002\x00\x00\x00 N\x00\x00\x00\x00\x00\x00d\x00\x00\x00 N\x00\x00\x00\x00\x00\x00\xb6\x80\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',)
@@ -472,6 +470,7 @@ def reconstruct_channels(data_FLdt, channels):
         else: reconstruct_flevent(data_FLdt, 218, b'\x00\x00\x00\x00\x00\x00\x00\x00d\x00\x00\x00 N\x00\x00 N\x00\x000u\x00\x002\x00\x00\x00 N\x00\x00\x00\x00\x00\x00d\x00\x00\x00 N\x00\x00\x00\x00\x00\x00\xb6\x80\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',)
         if 'sampleflags' in channels[channel]: reconstruct_flevent(data_FLdt, 143, channels[channel]['sampleflags']) #SampleFlags
         if 'looptype' in channels[channel]: reconstruct_flevent(data_FLdt, 20, channels[channel]['looptype']) #LoopType
+        if 'middlenote' in channels[channel]: reconstruct_flevent(data_FLdt, 135, channels[channel]['middlenote']) #MiddleNote
         if 'samplefilename' in channels[channel]: reconstruct_flevent(data_FLdt, 196, channels[channel]['samplefilename'].encode('utf-16le') + b'\x00\x00') #SampleFileName
         #print(channel)
 def reconstruct_patterns(data_FLdt, patterns):
@@ -479,6 +478,17 @@ def reconstruct_patterns(data_FLdt, patterns):
         reconstruct_flevent(data_FLdt, 65, int(pattern)) #NewPat
         #print(pattern)
         patternlistdata = patterns[str(pattern)]
+        if 'automation' in patternlistdata:
+            autopoint = patternlistdata['automation']
+            BytesIO_autodata = BytesIO()
+            for singleautopoint in autopoint:
+                #print(singleautopoint)
+                BytesIO_autodata.write(singleautopoint['pos'].to_bytes(4, 'little'))
+                BytesIO_autodata.write(singleautopoint['control'].to_bytes(2, 'little'))
+                BytesIO_autodata.write(singleautopoint['rack'].to_bytes(2, 'little'))
+                BytesIO_autodata.write(singleautopoint['value'])
+            BytesIO_autodata.seek(0)
+            reconstruct_flevent(data_FLdt, 223, BytesIO_autodata.read()) #AutomationData
         if 'notes' in patternlistdata:
             notelist = patternlistdata['notes']
             BytesIO_notedata = BytesIO()
@@ -499,27 +509,99 @@ def reconstruct_patterns(data_FLdt, patterns):
                 BytesIO_notedata.write(singlenote['mod_y'].to_bytes(1, 'little'))
             BytesIO_notedata.seek(0)
             reconstruct_flevent(data_FLdt, 224, BytesIO_notedata.read()) #PatternNotes
-        if 'automation' in patternlistdata:
-            autopoint = patternlistdata['automation']
-            BytesIO_autodata = BytesIO()
-            for singleautopoint in autopoint:
-                #print(singleautopoint)
-                BytesIO_autodata.write(singleautopoint['pos'].to_bytes(4, 'little'))
-                BytesIO_autodata.write(singleautopoint['control'].to_bytes(2, 'little'))
-                BytesIO_autodata.write(singleautopoint['rack'].to_bytes(2, 'little'))
-                BytesIO_autodata.write(singleautopoint['value'])
-            BytesIO_autodata.seek(0)
-            reconstruct_flevent(data_FLdt, 223, BytesIO_autodata.read()) #AutomationData
         if 'color' in patternlistdata:
             reconstruct_flevent(data_FLdt, 150, patternlistdata['color']) #PatColor
+def reconstruct_trackinfo(data_FLdt, trackinfo):
+    for i in range(1,500):
+        if str(i) in trackinfo:
+            trkparams = trackinfo[str(i)]
+            fltrki_color = 5656904
+            fltrki_icon = 0
+            fltrki_enabled = 1
+            fltrki_height = 1.0
+            fltrki_lockedtocontent = 255
+            fltrki_motion = 16777215
+            fltrki_press = 0
+            fltrki_triggersync = 0
+            fltrki_queued = 5
+            fltrki_tolerant = 0
+            fltrki_positionSync = 1
+            fltrki_grouped = 0
+            fltrki_locked = 0
+            if 'color' in trkparams: fltrki_color = trkparams['color']
+            if 'icon' in trkparams: fltrki_icon = trkparams['icon']
+            if 'enabled' in trkparams: fltrki_enabled = trkparams['enabled']
+            if 'height' in trkparams: fltrki_height = trkparams['height']
+            if 'lockedtocontent' in trkparams: fltrki_lockedtocontent = trkparams['lockedtocontent']
+            if 'motion' in trkparams: fltrki_motion = trkparams['motion']
+            if 'press' in trkparams: fltrki_press = trkparams['press']
+            if 'triggersync' in trkparams: fltrki_triggersync = trkparams['triggersync']
+            if 'queued' in trkparams: fltrki_queued = trkparams['queued']
+            if 'tolerant' in trkparams: fltrki_tolerant = trkparams['tolerant']
+            if 'positionSync' in trkparams: fltrki_positionSync = trkparams['positionSync']
+            if 'grouped' in trkparams: fltrki_grouped = trkparams['grouped']
+            if 'locked' in trkparams: fltrki_locked = trkparams['locked']
+            BytesIO_trackinfo = BytesIO()
+            BytesIO_trackinfo.write(i.to_bytes(4, "little"))
+            BytesIO_trackinfo.write(fltrki_color.to_bytes(4, "little"))
+            BytesIO_trackinfo.write(fltrki_icon.to_bytes(4, "little"))
+            BytesIO_trackinfo.write(fltrki_enabled.to_bytes(1, "little"))
+            BytesIO_trackinfo.write(struct.pack('<f', fltrki_height))
+            BytesIO_trackinfo.write(fltrki_lockedtocontent.to_bytes(1, "little"))
+            BytesIO_trackinfo.write(fltrki_motion.to_bytes(4, "little"))
+            BytesIO_trackinfo.write(fltrki_press.to_bytes(4, "little"))
+            BytesIO_trackinfo.write(fltrki_triggersync.to_bytes(4, "little"))
+            BytesIO_trackinfo.write(fltrki_queued.to_bytes(4, "little"))
+            BytesIO_trackinfo.write(fltrki_tolerant.to_bytes(4, "little"))
+            BytesIO_trackinfo.write(fltrki_positionSync.to_bytes(4, "little"))
+            BytesIO_trackinfo.write(fltrki_grouped.to_bytes(1, "little"))
+            BytesIO_trackinfo.write(fltrki_locked.to_bytes(1, "little"))
+            BytesIO_trackinfo.seek(0)
+            reconstruct_flevent(data_FLdt, 238, BytesIO_trackinfo.read())
+def reconstruct_mixer(data_FLdt, mixer):
+    for i in range(0,126):
+        slotnum = 0
+        fltrki_color = None
+        fltrki_icon = None
+        fltrki_slots = {0: None, 1: None, 2: None, 3: None, 4: None, 5: None, 6: None, 7: None, 8: None, 9: None}
+        fltrki_data = b'\x00\x00\x00\x00L\x00\x00\x00\x00\x00\x00\x00'
+        fltrki_routing = [0]
+        fltrki_inchannum = 4294967295
+        fltrki_outchannum = 4294967295
+        if str(i) in mixer:
+            fxparams = mixer[str(i)]
+            if 'color' in fxparams: fltrki_color = fxparams['color']
+            if 'icon' in fxparams: fltrki_icon = fxparams['icon']
+            if 'slots' in fxparams: fltrki_slots = fxparams['slots']
+            if 'data' in fxparams: fltrki_data = fxparams['data']
+            if 'routing' in fxparams: fltrki_routing = fxparams['routing']
+            if 'inchannum' in fxparams: fltrki_inchannum = fxparams['inchannum']
+            if 'outchannum' in fxparams: fltrki_outchannum = fxparams['outchannum']
+        reconstruct_flevent(data_FLdt, 236, fltrki_data)
+        for fltrki_slot in fltrki_slots:
+            fxslotL = fltrki_slots[fltrki_slot]
+            if fxslotL != None:
+                print(fxslotL)
+                reconstruct_flevent(data_FLdt, 201, fxslotL['plugin'].encode('utf-16le') + b'\x00\x00')
+                reconstruct_flevent(data_FLdt, 212, fxslotL['data'])
+                if 'icon' in fxslotL: reconstruct_flevent(data_FLdt, 155, fxslotL['icon'])
+                if 'color' in fxslotL: reconstruct_flevent(data_FLdt, 128, fxslotL['color'])
+                reconstruct_flevent(data_FLdt, 213, fxslotL['pluginparams'])
+            reconstruct_flevent(data_FLdt, 98, slotnum)
+            slotnum += 1
+
+        fxrouting_fl = []
+        for i in range(0,126):
+            fxrouting_fl.append(0)
+        for route in fxparams['routing']:
+            fxrouting_fl[route] = 1
+        reconstruct_flevent(data_FLdt, 235, bytearray(prime_numbers))
+        reconstruct_flevent(data_FLdt, 154, fltrki_inchannum)
+        reconstruct_flevent(data_FLdt, 147, fltrki_outchannum)
+
 def reconstruct(FLP_Data, outputfile):
-
-    #print('--- Output:')  
-
     flpout = open(outputfile, 'wb')
-    
     numofchannels = len(FLP_Data['FL_Channels'])
-
     #FLhd
     data_FLhd = BytesIO()
     data_FLhd.write(numofchannels.to_bytes(3, 'big'))
@@ -551,6 +633,14 @@ def reconstruct(FLP_Data, outputfile):
     reconstruct_patterns(data_FLdt, FLP_Data['FL_Patterns'])
     reconstruct_channels(data_FLdt, FLP_Data['FL_Channels'])
     reconstruct_arrangement(data_FLdt, FLP_Data['FL_Arrangements'])
+    reconstruct_timemarkers(data_FLdt, FLP_Data['FL_TimeMarkers'])
+    reconstruct_trackinfo(data_FLdt, FLP_Data['FL_Tracks'])
+    reconstruct_flevent(data_FLdt, 100, 0)
+    reconstruct_flevent(data_FLdt, 29, 1)
+    reconstruct_flevent(data_FLdt, 39, 0)
+    reconstruct_flevent(data_FLdt, 31, 0)
+    reconstruct_flevent(data_FLdt, 38, 1)
+    reconstruct_mixer(data_FLdt, FLP_Data['FL_Mixer'])
 
     data_FLhd.seek(0)
     flpout.write(b'FLhd')
