@@ -345,6 +345,7 @@ def deconstruct(inputfile):
                 FXPlugin['data'] = event_data
             if event_id == 155: FXPlugin['icon'] = event_data
             if event_id == 128: FXPlugin['color'] = event_data
+            if event_id == 203: FXPlugin['name'] = event_data.decode('utf-16le').rstrip('\x00\x00')
             if event_id == 98: #FXToSlotNum
                 FL_Mixer[str(T_FL_FXNum)]['slots'][event_data] = FXPlugin
                 FXPlugin = None
@@ -559,7 +560,7 @@ def reconstruct_trackinfo(data_FLdt, trackinfo):
             BytesIO_trackinfo.seek(0)
             reconstruct_flevent(data_FLdt, 238, BytesIO_trackinfo.read())
 def reconstruct_mixer(data_FLdt, mixer):
-    for i in range(0,126):
+    for i in range(0,127):
         slotnum = 0
         fltrki_color = None
         fltrki_icon = None
@@ -584,6 +585,7 @@ def reconstruct_mixer(data_FLdt, mixer):
                 print(fxslotL)
                 reconstruct_flevent(data_FLdt, 201, fxslotL['plugin'].encode('utf-16le') + b'\x00\x00')
                 reconstruct_flevent(data_FLdt, 212, fxslotL['data'])
+                if 'name' in fxslotL: reconstruct_flevent(data_FLdt, 203, fxslotL['name'].encode('utf-16le') + b'\x00\x00')
                 if 'icon' in fxslotL: reconstruct_flevent(data_FLdt, 155, fxslotL['icon'])
                 if 'color' in fxslotL: reconstruct_flevent(data_FLdt, 128, fxslotL['color'])
                 reconstruct_flevent(data_FLdt, 213, fxslotL['pluginparams'])
@@ -591,11 +593,11 @@ def reconstruct_mixer(data_FLdt, mixer):
             slotnum += 1
 
         fxrouting_fl = []
-        for i in range(0,126):
+        for i in range(0,127):
             fxrouting_fl.append(0)
         for route in fxparams['routing']:
             fxrouting_fl[route] = 1
-        reconstruct_flevent(data_FLdt, 235, bytearray(prime_numbers))
+        reconstruct_flevent(data_FLdt, 235, bytearray(fxrouting_fl))
         reconstruct_flevent(data_FLdt, 154, fltrki_inchannum)
         reconstruct_flevent(data_FLdt, 147, fltrki_outchannum)
 
