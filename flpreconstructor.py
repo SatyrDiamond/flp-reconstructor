@@ -172,8 +172,7 @@ def deconstruct(inputfile):
             while autodata[0].tell() < autodata[1]:
                 pointdata = {}
                 pointdata['pos'] = int.from_bytes(autodata[0].read(4), "little")
-                pointdata['control'] = int.from_bytes(autodata[0].read(2), "little")
-                pointdata['rack'] = int.from_bytes(autodata[0].read(2), "little")
+                pointdata['control'] = autodata[0].read(4)
                 pointdata['value'] = autodata[0].read(4)
                 autopoints.append(pointdata)
             if str(T_FL_CurrentPattern) not in FL_Patterns:
@@ -485,8 +484,7 @@ def reconstruct_patterns(data_FLdt, patterns):
             for singleautopoint in autopoint:
                 #print(singleautopoint)
                 BytesIO_autodata.write(singleautopoint['pos'].to_bytes(4, 'little'))
-                BytesIO_autodata.write(singleautopoint['control'].to_bytes(2, 'little'))
-                BytesIO_autodata.write(singleautopoint['rack'].to_bytes(2, 'little'))
+                BytesIO_autodata.write(singleautopoint['control'])
                 BytesIO_autodata.write(singleautopoint['value'])
             BytesIO_autodata.seek(0)
             reconstruct_flevent(data_FLdt, 223, BytesIO_autodata.read()) #AutomationData
