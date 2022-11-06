@@ -164,6 +164,8 @@ def deconstruct(inputfile):
     
         if event_id == 65: 
             T_FL_CurrentPattern = event_data
+            if str(T_FL_CurrentPattern) not in FL_Patterns:
+                FL_Patterns[str(T_FL_CurrentPattern)] = {}
             #print('Pattern:', event_data)
         if event_id == 223: #AutomationData
             #print('\\__AutomationData')
@@ -199,8 +201,6 @@ def deconstruct(inputfile):
                 notedata['mod_x'] = int.from_bytes(fl_notedata[0].read(1), "little")
                 notedata['mod_y'] = int.from_bytes(fl_notedata[0].read(1), "little")
                 notelist.append(notedata)
-            if str(T_FL_CurrentPattern) not in FL_Patterns:
-                FL_Patterns[str(T_FL_CurrentPattern)] = {}
             FL_Patterns[str(T_FL_CurrentPattern)]['notes'] = notelist
     
         if event_id == 150: 
@@ -580,7 +580,6 @@ def reconstruct_mixer(data_FLdt, mixer):
         for fltrki_slot in fltrki_slots:
             fxslotL = fltrki_slots[fltrki_slot]
             if fxslotL != None:
-                print(fxslotL)
                 reconstruct_flevent(data_FLdt, 201, fxslotL['plugin'].encode('utf-16le') + b'\x00\x00')
                 reconstruct_flevent(data_FLdt, 212, fxslotL['data'])
                 if 'name' in fxslotL: reconstruct_flevent(data_FLdt, 203, fxslotL['name'].encode('utf-16le') + b'\x00\x00')
