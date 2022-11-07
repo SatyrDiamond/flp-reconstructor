@@ -27,6 +27,8 @@ def readriffdata(riffbytebuffer, offset):
         chunkdata = riffbytebuffer.read(chunksize)
         riffobjects.append([chunkname, chunkdata])
     return riffobjects
+def clamp(n, minn, maxn):
+    return max(min(maxn, n), minn)
 
 # ------------- deconstruct -------------
 def deconstruct_arrangement(arrdata):
@@ -49,6 +51,11 @@ def deconstruct_arrangement(arrdata):
         if endoffset != 4294967295: placement['endoffset'] = endoffset
         output.append(placement)
     return output
+def deconstruct_basicparams(basicparamsdata, chanl):
+    bio_basicparams = create_bytesio(basicparamsdata)[0]
+    chanl['pan'] = ((int.from_bytes(bio_basicparams.read(4), "little")/12800)-0.5)*2
+    chanl['volume'] = (int.from_bytes(bio_basicparams.read(4), "little")/12800)
+    chanl['pitch'] = int.from_bytes(bio_basicparams.read(4), "little", signed="True")
 def deconstruct_trackinfo(trackdata):
     bio_fltrack = create_bytesio(trackdata)[0]
     params = {}
@@ -191,7 +198,9 @@ def deconstruct(inputfile):
                 notedata['flags'] = int.from_bytes(fl_notedata[0].read(2), "little")
                 notedata['rack'] = int.from_bytes(fl_notedata[0].read(2), "little")
                 notedata['dur'] = int.from_bytes(fl_notedata[0].read(4), "little")
-                notedata['key'] = int.from_bytes(fl_notedata[0].read(4), "little")
+                notedata['key'] = int.from_bytes(fl_notedata[0].read(2), "little")
+                notegroup = int.from_bytes(fl_notedata[0].read(2), "little")
+                if notegroup != 0: notedata['group'] = notegroup
                 notedata['finep'] = int.from_bytes(fl_notedata[0].read(1), "little")
                 notedata['u1'] = int.from_bytes(fl_notedata[0].read(1), "little")
                 notedata['rel'] = int.from_bytes(fl_notedata[0].read(1), "little")
@@ -303,8 +312,8 @@ def deconstruct(inputfile):
             if event_id == 85: FL_Channels[str(T_FL_CurrentChannel)]['stdel'] = event_data
             if event_id == 131: FL_Channels[str(T_FL_CurrentChannel)]['fxsine'] = event_data
             if event_id == 70: FL_Channels[str(T_FL_CurrentChannel)]['fadestereo'] = event_data
-            if event_id == 22: FL_Channels[str(T_FL_CurrentChannel)]['mixslicenum'] = event_data
-            if event_id == 219: FL_Channels[str(T_FL_CurrentChannel)]['basicparams'] = event_data
+            if event_id == 22: FL_Channels[str(T_FL_CurrentChannel)]['fxchannel'] = event_data
+            if event_id == 219: deconstruct_basicparams(event_data,FL_Channels[str(T_FL_CurrentChannel)])
             if event_id == 229: FL_Channels[str(T_FL_CurrentChannel)]['ofslevels'] = event_data
             if event_id == 221: FL_Channels[str(T_FL_CurrentChannel)]['poly'] = event_data
             if event_id == 215: FL_Channels[str(T_FL_CurrentChannel)]['params'] = event_data
@@ -424,6 +433,20 @@ def reconstruct_timemarkers(data_FLdt, timemarkers):
         else: reconstruct_flevent(data_FLdt, 34, 4)
         if 'name' in timemarker_item: reconstruct_flevent(data_FLdt, 205, timemarker_item['name'].encode('utf-16le') + b'\x00\x00')
         else: reconstruct_flevent(data_FLdt, 205, b'\x20\x00\x00\x00')
+def reconstruct_basicparams(data_FLdt, channel):
+    basicp_pan = 0
+    basicp_volume = 1.0
+    basicp_pitch = 0
+    if 'pan' in channel: basicp_pan = int(clamp((channel['pan']/2)+0.5, 0, 1)*12800)
+    if 'volume' in channel: basicp_volume = int(clamp(channel['volume'], 0, 1)*12800)
+    if 'pitch' in channel: basicp_pitch = channel['pitch']
+    bio_basicparams = BytesIO()
+    bio_basicparams.write(basicp_pan.to_bytes(4, "little"))
+    bio_basicparams.write(basicp_volume.to_bytes(4, "little"))
+    bio_basicparams.write(basicp_pitch.to_bytes(4, "little", signed="True"))
+    bio_basicparams.write(b'\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00')
+    bio_basicparams.seek(0)
+    reconstruct_flevent(data_FLdt, 219, bio_basicparams.read())
 def reconstruct_channels(data_FLdt, channels):
     for channel in channels:
         reconstruct_flevent(data_FLdt, 64, int(channel)) #NewChan
@@ -449,8 +472,8 @@ def reconstruct_channels(data_FLdt, channels):
         if 'stdel' in channels[channel]: reconstruct_flevent(data_FLdt, 85, channels[channel]['stdel']) #StDel
         if 'fxsine' in channels[channel]: reconstruct_flevent(data_FLdt, 131, channels[channel]['fxsine']) #FXSine
         if 'fadestereo' in channels[channel]: reconstruct_flevent(data_FLdt, 70, channels[channel]['fadestereo']) #Fade_Stereo
-        if 'mixslicenum' in channels[channel]: reconstruct_flevent(data_FLdt, 22, channels[channel]['mixslicenum']) #MixSliceNum
-        if 'basicparams' in channels[channel]: reconstruct_flevent(data_FLdt, 219, channels[channel]['basicparams']) #BasicChanParams
+        if 'fxchannel' in channels[channel]: reconstruct_flevent(data_FLdt, 22, channels[channel]['fxchannel']) #MixSliceNum
+        reconstruct_basicparams(data_FLdt, channels[channel])
         if 'ofslevels' in channels[channel]: reconstruct_flevent(data_FLdt, 229, channels[channel]['ofslevels']) #BasicChanParams
         if 'poly' in channels[channel]: reconstruct_flevent(data_FLdt, 221, channels[channel]['poly']) #ChanPoly
         if 'params' in channels[channel]: reconstruct_flevent(data_FLdt, 215, channels[channel]['params']) #ChanParams
@@ -474,6 +497,7 @@ def reconstruct_channels(data_FLdt, channels):
         if 'samplefilename' in channels[channel]: reconstruct_flevent(data_FLdt, 196, channels[channel]['samplefilename'].encode('utf-16le') + b'\x00\x00') #SampleFileName
         #print(channel)
 def reconstruct_patterns(data_FLdt, patterns):
+    zero = 0
     for pattern in patterns:
         reconstruct_flevent(data_FLdt, 65, int(pattern)) #NewPat
         #print(pattern)
@@ -497,7 +521,11 @@ def reconstruct_patterns(data_FLdt, patterns):
                 BytesIO_notedata.write(singlenote['flags'].to_bytes(2, 'little'))
                 BytesIO_notedata.write(singlenote['rack'].to_bytes(2, 'little'))
                 BytesIO_notedata.write(singlenote['dur'].to_bytes(4, 'little'))
-                BytesIO_notedata.write(singlenote['key'].to_bytes(4, 'little'))
+                BytesIO_notedata.write(singlenote['key'].to_bytes(2, 'little'))
+                if 'group' in singlenote:
+                    if singlenote['group'] != 0: BytesIO_notedata.write(singlenote['group'].to_bytes(2, 'little'))
+                    else: BytesIO_notedata.write(zero.to_bytes(2, 'little'))
+                else: BytesIO_notedata.write(zero.to_bytes(2, 'little'))
                 BytesIO_notedata.write(singlenote['finep'].to_bytes(1, 'little'))
                 BytesIO_notedata.write(singlenote['u1'].to_bytes(1, 'little'))
                 BytesIO_notedata.write(singlenote['rel'].to_bytes(1, 'little'))
