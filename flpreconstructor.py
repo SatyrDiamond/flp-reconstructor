@@ -51,11 +51,56 @@ def deconstruct_arrangement(arrdata):
         if endoffset != 4294967295: placement['endoffset'] = endoffset
         output.append(placement)
     return output
+def deconstruct_chanparams(chanparams, chanl):
+    bio_chanparams = create_bytesio(chanparams)[0]
+    bio_chanparams.read(9) # ffffffff 00000000 00 
+    chanl['remove_dc'] = int.from_bytes(bio_chanparams.read(1), "little")
+    chanl['delayflags'] = int.from_bytes(bio_chanparams.read(1), "little")
+    chanl['main_pitch'] = int.from_bytes(bio_chanparams.read(1), "little")
+    bio_chanparams.read(28) # ffffffff3c0000000000803f0000803f0000803f0000803f0000803f
+    chanl['arpdirection'] = int.from_bytes(bio_chanparams.read(4), "little")
+    chanl['arprange'] = int.from_bytes(bio_chanparams.read(4), "little")
+    chanl['arpchord'] = int.from_bytes(bio_chanparams.read(4), "little")
+    chanl['arptime'] = int.from_bytes(bio_chanparams.read(4), "little")
+    chanl['arpgate'] = int.from_bytes(bio_chanparams.read(4), "little")
+    chanl['arpslide'] = int.from_bytes(bio_chanparams.read(1), "little")
+    bio_chanparams.read(1) # 00
+    chanl['timefull_porta'] = int.from_bytes(bio_chanparams.read(1), "little")
+    chanl['addtokey'] = int.from_bytes(bio_chanparams.read(1), "little")
+    chanl['timegate'] = int.from_bytes(bio_chanparams.read(2), "little")
+    bio_chanparams.read(2) # 05 00
+    chanl['keyrange_min'] = int.from_bytes(bio_chanparams.read(4), "little")
+    chanl['keyregio_max'] = int.from_bytes(bio_chanparams.read(4), "little")
+    bio_chanparams.read(4) # 00 00 00 00
+    chanl['normalize'] = int.from_bytes(bio_chanparams.read(1), "little")
+    chanl['reversepolarity'] = int.from_bytes(bio_chanparams.read(1), "little")
+    bio_chanparams.read(1) # 00
+    chanl['declickmode'] = int.from_bytes(bio_chanparams.read(1), "little")
+    chanl['crossfade'] = int.from_bytes(bio_chanparams.read(4), "little")
+    chanl['trim'] = int.from_bytes(bio_chanparams.read(4), "little")
+    chanl['arprepeat'] = int.from_bytes(bio_chanparams.read(4), "little")
+    chanl['stretchingtime'] = int.from_bytes(bio_chanparams.read(4), "little")
+    chanl['stretchingpitch'] = int.from_bytes(bio_chanparams.read(4), "little")
+    chanl['stretchingmultiplier'] = int.from_bytes(bio_chanparams.read(4), "little", signed="True")
+    chanl['stretchingmode'] = int.from_bytes(bio_chanparams.read(4), "little", signed="True")
+    bio_chanparams.read(21) # b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff'
+    chanl['start'] = bio_chanparams.read(4)
+    bio_chanparams.read(4) # b'\x00\x00\x00\x00'
+    chanl['length'] = bio_chanparams.read(4)
+    bio_chanparams.read(3) # b'\x00\x00\x00'
+    chanl['start_offset'] = bio_chanparams.read(4)
+    bio_chanparams.read(5) # b'\xff\xff\xff\xff\x00'
+    chanl['fix_trim'] = int.from_bytes(bio_chanparams.read(1), "little")
 def deconstruct_basicparams(basicparamsdata, chanl):
     bio_basicparams = create_bytesio(basicparamsdata)[0]
     chanl['pan'] = ((int.from_bytes(bio_basicparams.read(4), "little")/12800)-0.5)*2
     chanl['volume'] = (int.from_bytes(bio_basicparams.read(4), "little")/12800)
     chanl['pitch'] = int.from_bytes(bio_basicparams.read(4), "little", signed="True")
+def deconstruct_poly(polydata, chanl):
+    bio_poly = create_bytesio(polydata)[0]
+    chanl['polymax'] = int.from_bytes(bio_poly.read(4), "little")
+    chanl['polyslide'] = int.from_bytes(bio_poly.read(4), "little")
+    chanl['polyflags'] = int.from_bytes(bio_poly.read(1), "little")
 def deconstruct_trackinfo(trackdata):
     bio_fltrack = create_bytesio(trackdata)[0]
     params = {}
@@ -314,6 +359,8 @@ def deconstruct(inputfile):
             if event_id == 70: FL_Channels[str(T_FL_CurrentChannel)]['fadestereo'] = event_data
             if event_id == 22: FL_Channels[str(T_FL_CurrentChannel)]['fxchannel'] = event_data
             if event_id == 219: deconstruct_basicparams(event_data,FL_Channels[str(T_FL_CurrentChannel)])
+            if event_id == 221: deconstruct_poly(event_data,FL_Channels[str(T_FL_CurrentChannel)])
+            if event_id == 215: deconstruct_chanparams(event_data,FL_Channels[str(T_FL_CurrentChannel)])
             if event_id == 229: FL_Channels[str(T_FL_CurrentChannel)]['ofslevels'] = event_data
             if event_id == 221: FL_Channels[str(T_FL_CurrentChannel)]['poly'] = event_data
             if event_id == 215: FL_Channels[str(T_FL_CurrentChannel)]['params'] = event_data
@@ -447,13 +494,127 @@ def reconstruct_basicparams(data_FLdt, channel):
     bio_basicparams.write(b'\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00')
     bio_basicparams.seek(0)
     reconstruct_flevent(data_FLdt, 219, bio_basicparams.read())
+def reconstruct_poly(data_FLdt, channel):
+    temp_polymax = 0
+    temp_polyslide = 500
+    temp_polyflags = 0
+    if 'polymax' in channel: temp_polymax = channel['polymax']
+    if 'polyslide' in channel: temp_polyslide = channel['polyslide']
+    if 'polyflags' in channel: temp_polyflags = channel['polyflags']
+    bio_poly = BytesIO()
+    bio_poly.write(temp_polymax.to_bytes(4, "little"))
+    bio_poly.write(temp_polyslide.to_bytes(4, "little"))
+    bio_poly.write(temp_polyflags.to_bytes(1, "little"))
+    bio_poly.seek(0)
+    reconstruct_flevent(data_FLdt, 221, bio_poly.read())
+def reconstruct_chanparams(data_FLdt, channel):
+    temp_remove_dc = 0
+    temp_delayflags = 0
+    temp_main_pitch = 1
+    temp_arpdirection = 0
+    temp_arprange = 1
+    temp_arpchord = 4294967295
+    temp_arptime = 1024
+    temp_arpgate = 48
+    temp_arpslide = 0
+    temp_timefull_porta = 1
+    temp_addtokey = 0
+    temp_timegate = 1447
+    temp_keyrange_min = 0
+    temp_keyregio_max = 256
+    temp_normalize = 0
+    temp_reversepolarity = 0
+    temp_declickmode = 0
+    temp_crossfade = 0
+    temp_trim = 0
+    temp_arprepeat = 1
+    temp_stretchingtime = 0
+    temp_stretchingpitch = 0
+    temp_stretchingmultiplier = 0
+    temp_stretchingmode = 0
+    temp_start = b'\x00\x00\x00\x00'
+    temp_length = b'\x00\xf0?\x00'
+    temp_start_offset = b'\x00\x00\x00\x00'
+    temp_fix_trim = 1
+    if 'remove_dc' in channel: temp_remove_dc = channel['remove_dc']
+    if 'delayflags' in channel: temp_delayflags = channel['delayflags']
+    if 'main_pitch' in channel: temp_main_pitch = channel['main_pitch']
+    if 'arpdirection' in channel: temp_arpdirection = channel['arpdirection']
+    if 'arprange' in channel: temp_arprange = channel['arprange']
+    if 'arpchord' in channel: temp_arpchord = channel['arpchord']
+    if 'arptime' in channel: temp_arptime = channel['arptime']
+    if 'arpgate' in channel: temp_arpgate = channel['arpgate']
+    if 'arpslide' in channel: temp_arpslide = channel['arpslide']
+    if 'timefull_porta' in channel: temp_timefull_porta = channel['timefull_porta']
+    if 'addtokey' in channel: temp_addtokey = channel['addtokey']
+    if 'timegate' in channel: temp_timegate = channel['timegate']
+    if 'keyrange_min' in channel: temp_keyrange_min = channel['keyrange_min']
+    if 'keyregio_max' in channel: temp_keyregio_max = channel['keyregio_max']
+    if 'normalize' in channel: temp_normalize = channel['normalize']
+    if 'reversepolarity' in channel: temp_reversepolarity = channel['reversepolarity']
+    if 'declickmode' in channel: temp_declickmode = channel['declickmode']
+    if 'crossfade' in channel: temp_crossfade = channel['crossfade']
+    if 'trim' in channel: temp_trim = channel['trim']
+    if 'arprepeat' in channel: temp_arprepeat = channel['arprepeat']
+    if 'stretchingtime' in channel: temp_stretchingtime = channel['stretchingtime']
+    if 'stretchingpitch' in channel: temp_stretchingpitch = channel['stretchingpitch']
+    if 'stretchingmultiplier' in channel: temp_stretchingmultiplier = channel['stretchingmultiplier']
+    if 'stretchingmode' in channel: temp_stretchingmode = channel['stretchingmode']
+    if 'start' in channel: temp_start = channel['start']
+    if 'length' in channel: 
+        temp_length = channel['length']
+    if 'start_offset' in channel: temp_start_offset = channel['start_offset']
+    if 'fix_trim' in channel: temp_fix_trim = channel['fix_trim']
+    bio_chanparams = BytesIO()
+    bio_chanparams.write(b'\xff\xff\xff\xff\x00\x00\x00\x00\x00')
+    bio_chanparams.write(temp_remove_dc.to_bytes(1, "little"))
+    bio_chanparams.write(temp_delayflags.to_bytes(1, "little"))
+    bio_chanparams.write(temp_main_pitch.to_bytes(1, "little"))
+    bio_chanparams.write(b'\xff\xff\xff\xff\x3c\x00\x00\x00\x00\x00\x80\x3f\x00\x00\x80\x3f\x00\x00\x80\x3f\x00\x00\x80\x3f\x00\x00\x80\x3f')
+    bio_chanparams.write(temp_arpdirection.to_bytes(4, "little"))
+    bio_chanparams.write(temp_arprange.to_bytes(4, "little"))
+    bio_chanparams.write(temp_arpchord.to_bytes(4, "little"))
+    bio_chanparams.write(temp_arptime.to_bytes(4, "little"))
+    bio_chanparams.write(temp_arpgate.to_bytes(4, "little"))
+    bio_chanparams.write(temp_arpslide.to_bytes(1, "little"))
+    bio_chanparams.write(b'\x00')
+    bio_chanparams.write(temp_timefull_porta.to_bytes(1, "little"))
+    bio_chanparams.write(temp_addtokey.to_bytes(1, "little"))
+    bio_chanparams.write(temp_timegate.to_bytes(2, "little"))
+    bio_chanparams.write(b'\x05\x00')
+    bio_chanparams.write(temp_keyrange_min.to_bytes(4, "little"))
+    bio_chanparams.write(temp_keyregio_max.to_bytes(4, "little"))
+    bio_chanparams.write(b'\x00\x00\x00\x00')
+    bio_chanparams.write(temp_normalize.to_bytes(1, "little"))
+    bio_chanparams.write(temp_reversepolarity.to_bytes(1, "little"))
+    bio_chanparams.write(b'\x00')
+    bio_chanparams.write(temp_declickmode.to_bytes(1, "little"))
+    bio_chanparams.write(temp_crossfade.to_bytes(4, "little"))
+    bio_chanparams.write(temp_trim.to_bytes(4, "little"))
+    bio_chanparams.write(temp_arprepeat.to_bytes(4, "little"))
+    bio_chanparams.write(temp_stretchingtime.to_bytes(4, "little"))
+    bio_chanparams.write(temp_stretchingpitch.to_bytes(4, "little"))
+    bio_chanparams.write(temp_stretchingmultiplier.to_bytes(4, "little", signed="True"))
+    bio_chanparams.write(temp_stretchingmode.to_bytes(4, "little", signed="True"))
+    bio_chanparams.write(b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff')
+    bio_chanparams.write(temp_start)
+    bio_chanparams.write(b'\x00\x00\x00\x00')
+    bio_chanparams.write(temp_length)
+    bio_chanparams.write(b'\x00\x00\x00')
+    bio_chanparams.write(temp_start_offset)
+    bio_chanparams.write(b'\xff\xff\xff\xff\x00')
+    bio_chanparams.write(temp_fix_trim.to_bytes(4, "little"))
+    bio_chanparams.write(b'\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00')
+    bio_chanparams.seek(0)
+    reconstruct_flevent(data_FLdt, 215, bio_chanparams.read())
+
 def reconstruct_channels(data_FLdt, channels):
     for channel in channels:
         reconstruct_flevent(data_FLdt, 64, int(channel)) #NewChan
         reconstruct_flevent(data_FLdt, 21, channels[channel]['type']) #ChanType
         reconstruct_flevent(data_FLdt, 201, channels[channel]['plugin'].encode('utf-16le') + b'\x00\x00') #DefPluginName
         reconstruct_flevent(data_FLdt, 212, channels[channel]['chandata']) #NewPlugin
-        reconstruct_flevent(data_FLdt, 203, channels[channel]['name'].encode('utf-16le') + b'\x00\x00') #PluginName
+        if 'name' in channels[channel]: reconstruct_flevent(data_FLdt, 203, channels[channel]['name'].encode('utf-16le') + b'\x00\x00') #PluginName
         reconstruct_flevent(data_FLdt, 155, channels[channel]['icon']) #PluginIcon
         reconstruct_flevent(data_FLdt, 128, channels[channel]['color']) #Color
         if 'pluginparams' in channels[channel]: reconstruct_flevent(data_FLdt, 213, channels[channel]['pluginparams']) #PluginParams
@@ -474,6 +635,8 @@ def reconstruct_channels(data_FLdt, channels):
         if 'fadestereo' in channels[channel]: reconstruct_flevent(data_FLdt, 70, channels[channel]['fadestereo']) #Fade_Stereo
         if 'fxchannel' in channels[channel]: reconstruct_flevent(data_FLdt, 22, channels[channel]['fxchannel']) #MixSliceNum
         reconstruct_basicparams(data_FLdt, channels[channel])
+        reconstruct_poly(data_FLdt, channels[channel])
+        reconstruct_chanparams(data_FLdt, channels[channel])
         if 'ofslevels' in channels[channel]: reconstruct_flevent(data_FLdt, 229, channels[channel]['ofslevels']) #BasicChanParams
         if 'poly' in channels[channel]: reconstruct_flevent(data_FLdt, 221, channels[channel]['poly']) #ChanPoly
         if 'params' in channels[channel]: reconstruct_flevent(data_FLdt, 215, channels[channel]['params']) #ChanParams
