@@ -70,7 +70,7 @@ def deconstruct_chanparams(chanparams, chanl):
     chanl['timegate'] = int.from_bytes(bio_chanparams.read(2), "little")
     bio_chanparams.read(2) # 05 00
     chanl['keyrange_min'] = int.from_bytes(bio_chanparams.read(4), "little")
-    chanl['keyregio_max'] = int.from_bytes(bio_chanparams.read(4), "little")
+    chanl['keyrange_max'] = int.from_bytes(bio_chanparams.read(4), "little")
     bio_chanparams.read(4) # 00 00 00 00
     chanl['normalize'] = int.from_bytes(bio_chanparams.read(1), "little")
     chanl['reversepolarity'] = int.from_bytes(bio_chanparams.read(1), "little")
@@ -324,7 +324,7 @@ def deconstruct(inputfile):
             if event_id == 212:
                 #print('\\__NewPlugin')
                 FL_Channels[str(T_FL_CurrentChannel)]['plugin'] = DefPluginName
-                FL_Channels[str(T_FL_CurrentChannel)]['chandata'] = event_data
+                FL_Channels[str(T_FL_CurrentChannel)]['plugindata'] = event_data
                 EnvelopeNum = 0
             if event_id == 203: 
                 event_text = event_data.decode('utf-16le').rstrip('\x00\x00')
@@ -362,8 +362,6 @@ def deconstruct(inputfile):
             if event_id == 221: deconstruct_poly(event_data,FL_Channels[str(T_FL_CurrentChannel)])
             if event_id == 215: deconstruct_chanparams(event_data,FL_Channels[str(T_FL_CurrentChannel)])
             if event_id == 229: FL_Channels[str(T_FL_CurrentChannel)]['ofslevels'] = event_data
-            if event_id == 221: FL_Channels[str(T_FL_CurrentChannel)]['poly'] = event_data
-            if event_id == 215: FL_Channels[str(T_FL_CurrentChannel)]['params'] = event_data
             if event_id == 132: FL_Channels[str(T_FL_CurrentChannel)]['cutcutby'] = event_data
             if event_id == 144: FL_Channels[str(T_FL_CurrentChannel)]['layerflags'] = event_data
             if event_id == 145: FL_Channels[str(T_FL_CurrentChannel)]['filternum'] = event_data
@@ -482,11 +480,13 @@ def reconstruct_timemarkers(data_FLdt, timemarkers):
         else: reconstruct_flevent(data_FLdt, 205, b'\x20\x00\x00\x00')
 def reconstruct_basicparams(data_FLdt, channel):
     basicp_pan = 0
-    basicp_volume = 1.0
+    basicp_volume = 0.78125
     basicp_pitch = 0
-    if 'pan' in channel: basicp_pan = int(clamp((channel['pan']/2)+0.5, 0, 1)*12800)
-    if 'volume' in channel: basicp_volume = int(clamp(channel['volume'], 0, 1)*12800)
-    if 'pitch' in channel: basicp_pitch = channel['pitch']
+    if 'pan' in channel: basicp_pan = channel['pan']
+    if 'volume' in channel: basicp_volume = channel['volume']
+    basicp_pan = int(clamp((basicp_pan/2)+0.5, 0, 1)*12800)
+    basicp_volume = int(clamp(basicp_volume, 0, 1)*12800)
+    
     bio_basicparams = BytesIO()
     bio_basicparams.write(basicp_pan.to_bytes(4, "little"))
     bio_basicparams.write(basicp_volume.to_bytes(4, "little"))
@@ -521,7 +521,7 @@ def reconstruct_chanparams(data_FLdt, channel):
     temp_addtokey = 0
     temp_timegate = 1447
     temp_keyrange_min = 0
-    temp_keyregio_max = 256
+    temp_keyrange_max = 256
     temp_normalize = 0
     temp_reversepolarity = 0
     temp_declickmode = 0
@@ -549,7 +549,7 @@ def reconstruct_chanparams(data_FLdt, channel):
     if 'addtokey' in channel: temp_addtokey = channel['addtokey']
     if 'timegate' in channel: temp_timegate = channel['timegate']
     if 'keyrange_min' in channel: temp_keyrange_min = channel['keyrange_min']
-    if 'keyregio_max' in channel: temp_keyregio_max = channel['keyregio_max']
+    if 'keyrange_max' in channel: temp_keyrange_max = channel['keyrange_max']
     if 'normalize' in channel: temp_normalize = channel['normalize']
     if 'reversepolarity' in channel: temp_reversepolarity = channel['reversepolarity']
     if 'declickmode' in channel: temp_declickmode = channel['declickmode']
@@ -583,7 +583,7 @@ def reconstruct_chanparams(data_FLdt, channel):
     bio_chanparams.write(temp_timegate.to_bytes(2, "little"))
     bio_chanparams.write(b'\x05\x00')
     bio_chanparams.write(temp_keyrange_min.to_bytes(4, "little"))
-    bio_chanparams.write(temp_keyregio_max.to_bytes(4, "little"))
+    bio_chanparams.write(temp_keyrange_max.to_bytes(4, "little"))
     bio_chanparams.write(b'\x00\x00\x00\x00')
     bio_chanparams.write(temp_normalize.to_bytes(1, "little"))
     bio_chanparams.write(temp_reversepolarity.to_bytes(1, "little"))
@@ -613,10 +613,10 @@ def reconstruct_channels(data_FLdt, channels):
         reconstruct_flevent(data_FLdt, 64, int(channel)) #NewChan
         reconstruct_flevent(data_FLdt, 21, channels[channel]['type']) #ChanType
         reconstruct_flevent(data_FLdt, 201, channels[channel]['plugin'].encode('utf-16le') + b'\x00\x00') #DefPluginName
-        reconstruct_flevent(data_FLdt, 212, channels[channel]['chandata']) #NewPlugin
+        if 'plugindata' in channels[channel]: reconstruct_flevent(data_FLdt, 212, channels[channel]['plugindata']) #NewPlugin
         if 'name' in channels[channel]: reconstruct_flevent(data_FLdt, 203, channels[channel]['name'].encode('utf-16le') + b'\x00\x00') #PluginName
         reconstruct_flevent(data_FLdt, 155, channels[channel]['icon']) #PluginIcon
-        reconstruct_flevent(data_FLdt, 128, channels[channel]['color']) #Color
+        if 'color' in channels[channel]: reconstruct_flevent(data_FLdt, 128, channels[channel]['color']) #Color
         if 'pluginparams' in channels[channel]: reconstruct_flevent(data_FLdt, 213, channels[channel]['pluginparams']) #PluginParams
         if 'enabled' in channels[channel]: reconstruct_flevent(data_FLdt, 0, channels[channel]['enabled']) #Enabled
         if 'delay' in channels[channel]: reconstruct_flevent(data_FLdt, 209, channels[channel]['delay']) #Delay
@@ -679,24 +679,48 @@ def reconstruct_patterns(data_FLdt, patterns):
             notelist = patternlistdata['notes']
             BytesIO_notedata = BytesIO()
             for singlenote in notelist:
-                #print(singlenote)
-                BytesIO_notedata.write(singlenote['pos'].to_bytes(4, 'little'))
-                BytesIO_notedata.write(singlenote['flags'].to_bytes(2, 'little'))
-                BytesIO_notedata.write(singlenote['rack'].to_bytes(2, 'little'))
-                BytesIO_notedata.write(singlenote['dur'].to_bytes(4, 'little'))
+                temp_pos = 0
+                temp_flags = 16384
+                temp_rack = 0
+                temp_dur = 48
+                temp_finep = 120
+                temp_group = 0
+                temp_u1 = 0
+                temp_rel = 64
+                temp_midich = 0
+                temp_pan = 64
+                temp_velocity = 100
+                temp_mod_x = 128
+                temp_mod_y = 128
+
+                if 'pos' in singlenote: temp_pos = singlenote['pos']
+                if 'flags' in singlenote: temp_flags = singlenote['flags']
+                if 'rack' in singlenote: temp_rack = singlenote['rack']
+                if 'dur' in singlenote: temp_dur = singlenote['dur']
+                if 'group' in singlenote: temp_group = singlenote['group']
+                if 'finep' in singlenote: temp_finep = singlenote['finep']
+                if 'u1' in singlenote: temp_u1 = singlenote['u1']
+                if 'rel' in singlenote: temp_rel = singlenote['rel']
+                if 'midich' in singlenote: temp_midich = singlenote['midich']
+                if 'pan' in singlenote: temp_pan = singlenote['pan']
+                if 'velocity' in singlenote: temp_velocity = singlenote['velocity']
+                if 'mod_x' in singlenote: temp_mod_x = singlenote['mod_x']
+                if 'mod_y' in singlenote: temp_mod_y = singlenote['mod_y']
+
+                BytesIO_notedata.write(temp_pos.to_bytes(4, 'little'))
+                BytesIO_notedata.write(temp_flags.to_bytes(2, 'little'))
+                BytesIO_notedata.write(temp_rack.to_bytes(2, 'little'))
+                BytesIO_notedata.write(temp_dur.to_bytes(4, 'little'))
                 BytesIO_notedata.write(singlenote['key'].to_bytes(2, 'little'))
-                if 'group' in singlenote:
-                    if singlenote['group'] != 0: BytesIO_notedata.write(singlenote['group'].to_bytes(2, 'little'))
-                    else: BytesIO_notedata.write(zero.to_bytes(2, 'little'))
-                else: BytesIO_notedata.write(zero.to_bytes(2, 'little'))
-                BytesIO_notedata.write(singlenote['finep'].to_bytes(1, 'little'))
-                BytesIO_notedata.write(singlenote['u1'].to_bytes(1, 'little'))
-                BytesIO_notedata.write(singlenote['rel'].to_bytes(1, 'little'))
-                BytesIO_notedata.write(singlenote['midich'].to_bytes(1, 'little'))
-                BytesIO_notedata.write(singlenote['pan'].to_bytes(1, 'little'))
-                BytesIO_notedata.write(singlenote['velocity'].to_bytes(1, 'little'))
-                BytesIO_notedata.write(singlenote['mod_x'].to_bytes(1, 'little'))
-                BytesIO_notedata.write(singlenote['mod_y'].to_bytes(1, 'little'))
+                BytesIO_notedata.write(temp_group.to_bytes(2, 'little'))
+                BytesIO_notedata.write(temp_finep.to_bytes(1, 'little'))
+                BytesIO_notedata.write(temp_u1.to_bytes(1, 'little'))
+                BytesIO_notedata.write(temp_rel.to_bytes(1, 'little'))
+                BytesIO_notedata.write(temp_midich.to_bytes(1, 'little'))
+                BytesIO_notedata.write(temp_pan.to_bytes(1, 'little'))
+                BytesIO_notedata.write(temp_velocity.to_bytes(1, 'little'))
+                BytesIO_notedata.write(temp_mod_x.to_bytes(1, 'little'))
+                BytesIO_notedata.write(temp_mod_y.to_bytes(1, 'little'))
             BytesIO_notedata.seek(0)
             reconstruct_flevent(data_FLdt, 224, BytesIO_notedata.read()) #PatternNotes
         if 'color' in patternlistdata:
@@ -754,10 +778,17 @@ def reconstruct_mixer(data_FLdt, mixer):
         fltrki_color = None
         fltrki_icon = None
         fltrki_slots = {0: None, 1: None, 2: None, 3: None, 4: None, 5: None, 6: None, 7: None, 8: None, 9: None}
-        fltrki_data = b'\x00\x00\x00\x00L\x00\x00\x00\x00\x00\x00\x00'
         fltrki_routing = [0]
         fltrki_inchannum = 4294967295
         fltrki_outchannum = 4294967295
+        if i == 0: 
+            fltrki_data = b'\x00\x00\x00\x00\x0c\x00\x00\x00\x00\x00\x00\x00'
+            fltrki_outchannum = 0
+            fltrki_routing = []
+        elif i == 126: 
+            fltrki_data = b'\x00\x00\x00\x00\x0c\x00\x00\x00\x00\x00\x00\x00'
+            fltrki_routing = []
+        else: fltrki_data = b'\x00\x00\x00\x00L\x00\x00\x00\x00\x00\x00\x00'
         if str(i) in mixer:
             fxparams = mixer[str(i)]
             if 'color' in fxparams: fltrki_color = fxparams['color']
@@ -781,9 +812,10 @@ def reconstruct_mixer(data_FLdt, mixer):
             slotnum += 1
 
         fxrouting_fl = []
+
         for i in range(0,127):
             fxrouting_fl.append(0)
-        for route in fxparams['routing']:
+        for route in fltrki_routing:
             fxrouting_fl[route] = 1
         reconstruct_flevent(data_FLdt, 235, bytearray(fxrouting_fl))
         reconstruct_flevent(data_FLdt, 154, fltrki_inchannum)
@@ -827,7 +859,7 @@ def reconstruct(FLP_Data, outputfile):
     reconstruct_trackinfo(data_FLdt, FLP_Data['FL_Tracks'])
     reconstruct_flevent(data_FLdt, 100, 0)
     reconstruct_flevent(data_FLdt, 29, 1)
-    reconstruct_flevent(data_FLdt, 39, 0)
+    reconstruct_flevent(data_FLdt, 39, 1)
     reconstruct_flevent(data_FLdt, 31, 0)
     reconstruct_flevent(data_FLdt, 38, 1)
     reconstruct_mixer(data_FLdt, FLP_Data['FL_Mixer'])
