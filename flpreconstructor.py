@@ -188,7 +188,6 @@ def deconstruct(inputfile):
     FL_Mixer = {}
     for fxnum in range(127):
         FL_Mixer[str(fxnum)] = {}
-    FL_TimeMarkers = {}
 
     TimeMarker_id = 0
     FL_Arrangements = {}
@@ -268,8 +267,10 @@ def deconstruct(inputfile):
             #print('NewArrangement:', event_data)
             if str(T_FL_CurrentArrangement) not in FL_Arrangements:
                 FL_Arrangements[str(T_FL_CurrentArrangement)] = {}
-            print(T_FL_CurrentArrangement)
             FL_Arrangements[str(T_FL_CurrentArrangement)]['tracks'] = {}
+            FL_Arrangements[str(T_FL_CurrentArrangement)]['timemarkers'] = {}
+            FL_TimeMarkers = FL_Arrangements[str(T_FL_CurrentArrangement)]['timemarkers']
+            TimeMarker_id = 0
         if event_id == 241: 
             FL_Arrangements[str(T_FL_CurrentArrangement)]['name'] = event_data.decode('utf-16le').rstrip('\x00\x00')
         if event_id == 233: 
@@ -451,13 +452,12 @@ def reconstruct_flevent(FLdt_bytes, value, data):
         FLdt_bytes.write(data)
 def reconstruct_arrangement(data_FLdt, arrangements):
     for arrangement in arrangements:
-        print(arrangements[arrangement])
         reconstruct_flevent(data_FLdt, 99, int(arrangement)) #NewArrangement
         if 'name' in arrangements[arrangement]:
             reconstruct_flevent(data_FLdt, 241, arrangements[arrangement]['name'].encode('utf-16le') + b'\x00\x00') #ArrangementName
         placements = arrangements[arrangement]['items']
         arrtracks = arrangements[arrangement]['tracks']
-        print(arrtracks)
+        timemarkers = arrangements[arrangement]['timemarkers']
         BytesIO_arrangement = BytesIO()
         for item in placements:
             #print(singlenote)
@@ -478,6 +478,7 @@ def reconstruct_arrangement(data_FLdt, arrangements):
         reconstruct_flevent(data_FLdt, 36, 0)
         reconstruct_flevent(data_FLdt, 233, BytesIO_arrangement.read()) #PlayListItems
         reconstruct_trackinfo(data_FLdt, arrtracks)
+        reconstruct_timemarkers(data_FLdt, timemarkers)
 def reconstruct_timemarkers(data_FLdt, timemarkers):
     for timemarker in timemarkers:
         timemarker_item = timemarkers[timemarker]
@@ -949,8 +950,6 @@ def reconstruct(FLP_Data, outputfile):
     reconstruct_flevent(data_FLdt, 226, b'\xff\x00\x00\x00\xff\x00\x00\x00\x04\x00\xff\x0f\x04\x00\x00\x00\x00\xfe\xff\xff')
     reconstruct_channels(data_FLdt, FLP_Data['FL_Channels'])
     reconstruct_arrangement(data_FLdt, FLP_Data['FL_Arrangements'])
-    reconstruct_timemarkers(data_FLdt, FLP_Data['FL_TimeMarkers'])
-    #reconstruct_trackinfo(data_FLdt, FLP_Data['FL_Tracks'])
     reconstruct_flevent(data_FLdt, 100, 0)
     reconstruct_flevent(data_FLdt, 29, 1)
     reconstruct_flevent(data_FLdt, 39, 1)
