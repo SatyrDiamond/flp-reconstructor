@@ -840,6 +840,7 @@ def reconstruct_trackinfo(data_FLdt, trackinfo):
         BytesIO_trackinfo.write(fltrki_positionSync.to_bytes(4, "little"))
         BytesIO_trackinfo.write(fltrki_grouped.to_bytes(1, "little"))
         BytesIO_trackinfo.write(fltrki_locked.to_bytes(1, "little"))
+        BytesIO_trackinfo.write(b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\xff\xff\xff\xff\xff\xff\x01\x00\x00\x00\x00')
         BytesIO_trackinfo.seek(0)
         reconstruct_flevent(data_FLdt, 238, BytesIO_trackinfo.read())
         trackinfo_count += 1
