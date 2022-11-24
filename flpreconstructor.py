@@ -183,7 +183,7 @@ def deconstruct(inputfile):
     
     FL_Main = {}
     FL_Channels = {}
-    FL_Tracks = {}
+    #FL_Tracks = {}
     FL_Patterns = {}
     FL_Mixer = {}
     for fxnum in range(127):
@@ -263,9 +263,23 @@ def deconstruct(inputfile):
         if event_id == 193: 
             FL_Patterns[str(T_FL_CurrentPattern)]['name'] = event_data.decode('utf-16le').rstrip('\x00\x00')
 
+        if event_id == 99: 
+            T_FL_CurrentArrangement = event_data
+            #print('NewArrangement:', event_data)
+            if str(T_FL_CurrentArrangement) not in FL_Arrangements:
+                FL_Arrangements[str(T_FL_CurrentArrangement)] = {}
+            print(T_FL_CurrentArrangement)
+            FL_Arrangements[str(T_FL_CurrentArrangement)]['tracks'] = {}
+        if event_id == 241: 
+            FL_Arrangements[str(T_FL_CurrentArrangement)]['name'] = event_data.decode('utf-16le').rstrip('\x00\x00')
+        if event_id == 233: 
+            playlistitems = deconstruct_arrangement(event_data)
+            FL_Arrangements[str(T_FL_CurrentArrangement)]['items'] = playlistitems
+    
         if event_id == 238: #PLTrackInfo
             FLT_out = deconstruct_trackinfo(event_data)
             currenttracknum = FLT_out[0]
+            FL_Tracks = FL_Arrangements[str(T_FL_CurrentArrangement)]['tracks']
             if FLT_out[1] != None:
                 FL_Tracks[str(currenttracknum)] = FLT_out[1]
         if event_id == 239: #PLTrackName
@@ -273,17 +287,6 @@ def deconstruct(inputfile):
                 FL_Tracks[str(currenttracknum)] = {}
             FL_Tracks[str(currenttracknum)]['name'] = event_data.decode('utf-16le').rstrip('\x00\x00')
 
-        if event_id == 99: 
-            T_FL_CurrentArrangement = event_data
-            #print('NewArrangement:', event_data)
-            if str(T_FL_CurrentArrangement) not in FL_Arrangements:
-                FL_Arrangements[str(T_FL_CurrentArrangement)] = {}
-        if event_id == 241: 
-            FL_Arrangements[str(T_FL_CurrentArrangement)]['name'] = event_data.decode('utf-16le').rstrip('\x00\x00')
-        if event_id == 233: 
-            playlistitems = deconstruct_arrangement(event_data)
-            FL_Arrangements[str(T_FL_CurrentArrangement)]['items'] = playlistitems
-    
     
         if event_id == 148: 
             TimeMarker_id += 1
@@ -423,7 +426,6 @@ def deconstruct(inputfile):
     output['FL_Patterns'] = FL_Patterns
     output['FL_Channels'] = FL_Channels
     output['FL_Mixer'] = FL_Mixer
-    output['FL_Tracks'] = FL_Tracks
     output['FL_Arrangements'] = FL_Arrangements
     output['FL_TimeMarkers'] = FL_TimeMarkers
     return output
@@ -449,11 +451,13 @@ def reconstruct_flevent(FLdt_bytes, value, data):
         FLdt_bytes.write(data)
 def reconstruct_arrangement(data_FLdt, arrangements):
     for arrangement in arrangements:
-        #print(arrangements[arrangement])
+        print(arrangements[arrangement])
         reconstruct_flevent(data_FLdt, 99, int(arrangement)) #NewArrangement
         if 'name' in arrangements[arrangement]:
             reconstruct_flevent(data_FLdt, 241, arrangements[arrangement]['name'].encode('utf-16le') + b'\x00\x00') #ArrangementName
         placements = arrangements[arrangement]['items']
+        arrtracks = arrangements[arrangement]['tracks']
+        print(arrtracks)
         BytesIO_arrangement = BytesIO()
         for item in placements:
             #print(singlenote)
@@ -473,6 +477,7 @@ def reconstruct_arrangement(data_FLdt, arrangements):
         BytesIO_arrangement.seek(0)
         reconstruct_flevent(data_FLdt, 36, 0)
         reconstruct_flevent(data_FLdt, 233, BytesIO_arrangement.read()) #PlayListItems
+        reconstruct_trackinfo(data_FLdt, arrtracks)
 def reconstruct_timemarkers(data_FLdt, timemarkers):
     for timemarker in timemarkers:
         timemarker_item = timemarkers[timemarker]
@@ -622,7 +627,7 @@ def reconstruct_channels(data_FLdt, channels):
         reconstruct_flevent(data_FLdt, 201, channels[channel]['plugin'].encode('utf-16le') + b'\x00\x00') #DefPluginName
         if 'plugindata' in channels[channel]: reconstruct_flevent(data_FLdt, 212, channels[channel]['plugindata']) #NewPlugin
         if 'name' in channels[channel]: reconstruct_flevent(data_FLdt, 203, channels[channel]['name'].encode('utf-16le') + b'\x00\x00') #PluginName
-        reconstruct_flevent(data_FLdt, 155, channels[channel]['icon']) #PluginIcon
+        if 'icon' in channels[channel]: reconstruct_flevent(data_FLdt, 155, channels[channel]['icon']) #PluginIcon
         if 'color' in channels[channel]: reconstruct_flevent(data_FLdt, 128, channels[channel]['color']) #Color
         if 'pluginparams' in channels[channel]: reconstruct_flevent(data_FLdt, 213, channels[channel]['pluginparams']) #PluginParams
 
@@ -645,7 +650,7 @@ def reconstruct_channels(data_FLdt, channels):
         temp_cutcutby = 1179666
         temp_layerflags = 0
         temp_filternum = 0
-        temp_sampleflags = 3
+        temp_sampleflags = 10
         temp_looptype = 0
         temp_middlenote = 60
 
@@ -825,6 +830,12 @@ def reconstruct_trackinfo(data_FLdt, trackinfo):
             if 'positionSync' in trkparams: fltrki_positionSync = trkparams['positionSync']
             if 'grouped' in trkparams: fltrki_grouped = trkparams['grouped']
             if 'locked' in trkparams: fltrki_locked = trkparams['locked']
+            if 'name' in trkparams: 
+                trkname = trkparams['name'] 
+            else:
+                trkname = None
+        else:
+            trkname = None
         BytesIO_trackinfo = BytesIO()
         BytesIO_trackinfo.write(trackinfo_count.to_bytes(4, "little"))
         BytesIO_trackinfo.write(fltrki_color.to_bytes(4, "little"))
@@ -843,6 +854,8 @@ def reconstruct_trackinfo(data_FLdt, trackinfo):
         BytesIO_trackinfo.write(b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\xff\xff\xff\xff\xff\xff\x01\x00\x00\x00\x00')
         BytesIO_trackinfo.seek(0)
         reconstruct_flevent(data_FLdt, 238, BytesIO_trackinfo.read())
+        if trkname != None: 
+            reconstruct_flevent(data_FLdt, 239, trkname.encode('utf-16le') + b'\x00\x00')
         trackinfo_count += 1
 def reconstruct_mixer(data_FLdt, mixer):
     for i in range(0,127):
@@ -914,7 +927,7 @@ def reconstruct(FLP_Data, outputfile):
     reconstruct_flevent(data_FLdt, 67, 1) #CurrentPatNum
     reconstruct_flevent(data_FLdt, 9, 1) #LoopActive
     reconstruct_flevent(data_FLdt, 11, int(FLP_Data['FL_Main']['Shuffle'])) #Shuffle 
-    reconstruct_flevent(data_FLdt, 80, int(FLP_Data['FL_Main']['MainPitch'])) #MainPitch
+    #reconstruct_flevent(data_FLdt, 80, int(FLP_Data['FL_Main']['MainPitch'])) #MainPitch
     reconstruct_flevent(data_FLdt, 17, int(FLP_Data['FL_Main']['Numerator'])) #Numerator
     reconstruct_flevent(data_FLdt, 18, int(FLP_Data['FL_Main']['Denominator'])) #Denominator
     reconstruct_flevent(data_FLdt, 35, 1)
@@ -937,7 +950,7 @@ def reconstruct(FLP_Data, outputfile):
     reconstruct_channels(data_FLdt, FLP_Data['FL_Channels'])
     reconstruct_arrangement(data_FLdt, FLP_Data['FL_Arrangements'])
     reconstruct_timemarkers(data_FLdt, FLP_Data['FL_TimeMarkers'])
-    reconstruct_trackinfo(data_FLdt, FLP_Data['FL_Tracks'])
+    #reconstruct_trackinfo(data_FLdt, FLP_Data['FL_Tracks'])
     reconstruct_flevent(data_FLdt, 100, 0)
     reconstruct_flevent(data_FLdt, 29, 1)
     reconstruct_flevent(data_FLdt, 39, 1)
