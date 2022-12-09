@@ -192,11 +192,13 @@ def deconstruct(inputfile):
     TimeMarker_id = 0
     FL_Arrangements = {}
     FL_FXCreationMode = 0
+    FL_TimeMarkers = {}
     T_FL_FXNum = -1
 
     for event in eventtable:
         event_id = event[0]
         event_data = event[1]
+
         if event_id == 199: FL_Main['Version'] = event_data.decode('utf-8').rstrip('\x00')
         if event_id == 156: FL_Main['Tempo'] = event_data/1000
         if event_id == 80: FL_Main['MainPitch'] = event_data
@@ -311,6 +313,7 @@ def deconstruct(inputfile):
     
     
         if event_id == 64: 
+            EnvelopeNum = 0
             T_FL_CurrentChannel = event_data
             #print('Channel:', event_data)
             if str(T_FL_CurrentChannel) not in FL_Channels:
@@ -335,7 +338,7 @@ def deconstruct(inputfile):
                 FL_Channels[str(T_FL_CurrentChannel)]['plugin'] = DefPluginName
                 FL_Channels[str(T_FL_CurrentChannel)]['plugindata'] = event_data
                 #print(event_data)
-                EnvelopeNum = 0
+
             if event_id == 203: 
                 event_text = event_data.decode('utf-16le').rstrip('\x00\x00')
                 #print('\\__PluginName:', event_text)
@@ -418,8 +421,7 @@ def deconstruct(inputfile):
             if event_id == 147: FL_Mixer[str(T_FL_FXNum)]['outchannum'] = event_data
             if event_id == 204: 
                 event_text = event_data.decode('utf-16le').rstrip('\x00\x00')
-                #print('\\__FXName:', event_text)
-                FL_Mixer[str(T_FL_FXNum)]['name'] = event_text
+                FL_Mixer[str(T_FL_FXNum+1)]['name'] = event_text
 
     output = {}
     FL_Main['ppq'] = flp_ppq
@@ -456,15 +458,13 @@ def reconstruct_arrangement(data_FLdt, arrangements):
         if 'name' in arrangements[arrangement]:
             reconstruct_flevent(data_FLdt, 241, arrangements[arrangement]['name'].encode('utf-16le') + b'\x00\x00') #ArrangementName
         placements = arrangements[arrangement]['items']
-        arrtracks = arrangements[arrangement]['tracks']
-        timemarkers = arrangements[arrangement]['timemarkers']
         BytesIO_arrangement = BytesIO()
         for item in placements:
             #print(singlenote)
             BytesIO_arrangement.write(item['position'].to_bytes(4, 'little'))
             BytesIO_arrangement.write(item['patternbase'].to_bytes(2, 'little'))
             BytesIO_arrangement.write(item['itemindex'].to_bytes(2, 'little'))
-            BytesIO_arrangement.write(item['length'].to_bytes(4, 'little'))
+            BytesIO_arrangement.write(int(item['length']).to_bytes(4, 'little'))
             BytesIO_arrangement.write(item['trackindex'].to_bytes(4, 'little'))
             BytesIO_arrangement.write(item['unknown1'].to_bytes(2, 'little'))
             BytesIO_arrangement.write(item['flags'].to_bytes(2, 'little'))
@@ -477,8 +477,10 @@ def reconstruct_arrangement(data_FLdt, arrangements):
         BytesIO_arrangement.seek(0)
         reconstruct_flevent(data_FLdt, 36, 0)
         reconstruct_flevent(data_FLdt, 233, BytesIO_arrangement.read()) #PlayListItems
-        reconstruct_trackinfo(data_FLdt, arrtracks)
-        reconstruct_timemarkers(data_FLdt, timemarkers)
+        if 'tracks' in arrangements[arrangement]:
+            reconstruct_trackinfo(data_FLdt, arrangements[arrangement]['tracks'])
+        if 'timemarkers' in arrangements[arrangement]:
+            reconstruct_timemarkers(data_FLdt, arrangements[arrangement]['timemarkers'])
 def reconstruct_timemarkers(data_FLdt, timemarkers):
     for timemarker in timemarkers:
         timemarker_item = timemarkers[timemarker]
@@ -497,13 +499,14 @@ def reconstruct_basicparams(data_FLdt, channel):
     basicp_pitch = 0
     if 'pan' in channel: basicp_pan = channel['pan']
     if 'volume' in channel: basicp_volume = channel['volume']
+    if 'pitch' in channel: basicp_pitch = channel['pitch']
     basicp_pan = int(clamp((basicp_pan/2)+0.5, 0, 1)*12800)
     basicp_volume = int(clamp(basicp_volume, 0, 1)*12800)
     
     bio_basicparams = BytesIO()
     bio_basicparams.write(basicp_pan.to_bytes(4, "little"))
     bio_basicparams.write(basicp_volume.to_bytes(4, "little"))
-    bio_basicparams.write(basicp_pitch.to_bytes(4, "little", signed="True"))
+    bio_basicparams.write(int(basicp_pitch).to_bytes(4, "little", signed="True"))
     bio_basicparams.write(b'\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00')
     bio_basicparams.seek(0)
     reconstruct_flevent(data_FLdt, 219, bio_basicparams.read())
@@ -632,6 +635,7 @@ def reconstruct_channels(data_FLdt, channels):
         if 'color' in channels[channel]: reconstruct_flevent(data_FLdt, 128, channels[channel]['color']) #Color
         if 'pluginparams' in channels[channel]: reconstruct_flevent(data_FLdt, 213, channels[channel]['pluginparams']) #PluginParams
 
+        temp_enabled = 1
         temp_delay = b'\x00\x00\x00\x00\x00\x19\x00\x00\x00\x00\x00\x00\x04\x00\x00\x00\x90\x00\x00\x00'
         temp_delayreso = 8388736
         temp_reverb = 65536
@@ -647,8 +651,8 @@ def reconstruct_channels(data_FLdt, channels):
         temp_fxsine = 8388608
         temp_fadestereo = 0
         temp_fxchannel = 0
-        temp_ofslevels = b'\x00\x00\x00\x00<A\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
-        temp_cutcutby = 1179666
+        temp_ofslevels = b'\x00\x00\x00\x00\x002\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+        temp_cutcutby = 0
         temp_layerflags = 0
         temp_filternum = 0
         temp_sampleflags = 10
@@ -884,10 +888,13 @@ def reconstruct_mixer(data_FLdt, mixer):
             if 'routing' in fxparams: fltrki_routing = fxparams['routing']
             if 'inchannum' in fxparams: fltrki_inchannum = fxparams['inchannum']
             if 'outchannum' in fxparams: fltrki_outchannum = fxparams['outchannum']
+            if 'name' in fxparams: 
+                reconstruct_flevent(data_FLdt, 204, fxparams['name'].encode('utf-16le') + b'\x00\x00')
         reconstruct_flevent(data_FLdt, 236, fltrki_data)
         for fltrki_slot in fltrki_slots:
             fxslotL = fltrki_slots[fltrki_slot]
             if fxslotL != None:
+                #print(fxslotL)
                 reconstruct_flevent(data_FLdt, 201, fxslotL['plugin'].encode('utf-16le') + b'\x00\x00')
                 reconstruct_flevent(data_FLdt, 212, fxslotL['data'])
                 if 'name' in fxslotL: reconstruct_flevent(data_FLdt, 203, fxslotL['name'].encode('utf-16le') + b'\x00\x00')
@@ -924,11 +931,15 @@ def reconstruct(FLP_Data, outputfile):
     reconstruct_flevent(data_FLdt, 28, 1)
     reconstruct_flevent(data_FLdt, 37, 1)
     reconstruct_flevent(data_FLdt, 200, b'\x00\x00')
-    reconstruct_flevent(data_FLdt, 156, int(FLP_Data['FL_Main']['Tempo']*1000))
+    reconstruct_flevent(data_FLdt, 156, int(FLP_Data['FL_Main']['Tempo'])*1000)
     reconstruct_flevent(data_FLdt, 67, 1) #CurrentPatNum
     reconstruct_flevent(data_FLdt, 9, 1) #LoopActive
     reconstruct_flevent(data_FLdt, 11, int(FLP_Data['FL_Main']['Shuffle'])) #Shuffle 
     #reconstruct_flevent(data_FLdt, 80, int(FLP_Data['FL_Main']['MainPitch'])) #MainPitch
+    if 'Numerator' not in FLP_Data['FL_Main']:
+        FLP_Data['FL_Main']['Numerator'] = 4
+    if 'Denominator' not in FLP_Data['FL_Main']:
+        FLP_Data['FL_Main']['Denominator'] = 4
     reconstruct_flevent(data_FLdt, 17, int(FLP_Data['FL_Main']['Numerator'])) #Numerator
     reconstruct_flevent(data_FLdt, 18, int(FLP_Data['FL_Main']['Denominator'])) #Denominator
     reconstruct_flevent(data_FLdt, 35, 1)
